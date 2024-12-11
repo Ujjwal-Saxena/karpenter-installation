@@ -1,0 +1,121 @@
+[+] We proceeded and followed below steps: [1]
+````````````````````````````````````````````````````````````
+STEP -1> Create a new role for WorkerNodes management attach the below policies, and give it KarpenterInstanceNodeRole name.
+* 		AmazonEKSWorkerNodePolicy
+* 		AmazonEKS_CNI_Policy
+* 		AmazonEC2ContainerRegistryReadOnly
+* 		AmazonSSMManagedInstanceCore
+
+STEP -2> Attach new karptner policy “KarpenterControllerPolicy” using json as below:
+``````````````
+{
+    "Statement": [
+        {
+            "Action": [
+                "ssm:GetParameter",
+                "iam:PassRole",
+                "ec2:DescribeImages",
+                "ec2:RunInstances",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeLaunchTemplates",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeInstanceTypeOfferings",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DeleteLaunchTemplate",
+                "ec2:CreateTags",
+                "ec2:CreateLaunchTemplate",
+                "ec2:CreateFleet",
+                "ec2:DescribeSpotPriceHistory",
+                "pricing:GetProducts"
+            ],
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "Karpenter"
+        },
+        {
+            "Action": "ec2:TerminateInstances",
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/Name": "*karpenter*"
+                }
+            },
+            "Effect": "Allow",
+            "Resource": "*",
+            "Sid": "ConditionalEC2Termination"
+        }
+    ],
+    "Version": "2012-10-17"
+}
+```````````````
+
+STEP -3> In order for Karpenter to create a new WorkerNode in defined subnets and attach the already created security group we need to add below tags to security group and subnets:
+``````````
+Key=karpenter.sh/discovery
+Value=cluster3
+
+````````````
+
+STEP -4> Updated AWS-AUTH configmap with karpenter role attached:
+```````````
+kubectl -n kube-system edit configmap aws-auth
+
+    - groups:
+      - system:bootstrappers
+      - system:nodes
+      rolearn: arn:aws:iam::637423608548:role/KarpenterInstanceNodeRole
+      username: system:node:{{EC2PrivateDNSName}}
+
+```````````
+
+STEP -5> Login to a bastion host and installed AWS-CLI and kubectl with latest version.
+
+[+] As next steps, in order to install karpenter, you need to follow below steps as per document: [2]
+```````````````````````````````````````````````````
+
+STEP -1 > Set Environment variables:
+`````````````````` 
+> export KARPENTER_NAMESPACE="kube-system"
+> export KARPENTER_VERSION="0.35.4"
+> export K8S_VERSION="1.29"
+> export CLUSTER_NAME=cluster3
+> export AWS_DEFAULT_REGION=“us-east”-1
+> export AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+> export TEMPOUT="$(mktemp)"
+> export ARM_AMI_ID="$(aws ssm get-parameter --name /aws/service/eks/optimized-ami/${K8S_VERSION}/amazon-linux-2-arm64/recommended/image_id --query Parameter.Value --output text)"
+> echo "${KARPENTER_NAMESPACE}" "${KARPENTER_VERSION}" "${K8S_VERSION}" "${CLUSTER_NAME}" "${AWS_DEFAULT_REGION}" "${AWS_ACCOUNT_ID}" "${TEMPOUT}" "${ARM_AMI_ID}"
+
+```````````````````
+
+STEP -2 > Export Cluster endpoint and other variables as below:
+``````````````
+> export CLUSTER_ENDPOINT="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --query "cluster.endpoint" --output text)"
+> export KARPENTER_IAM_ROLE_ARN="arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/${CLUSTER_NAME}-karpenter"
+> echo "${CLUSTER_ENDPOINT} ${KARPENTER_IAM_ROLE_ARN}"
+````````````````
+
+STEP -3 > Install karpenter using helm charts and setup provisioner as per steps 4, and  5 as mentioned in document. 
+
+STEP -4 > Test the scaling of karpenter by following steps 6 and 7 as per document.
+
+`````````````````````````````````````````````````````````````````
+
+I hope the above information serves useful to you.
+
+At this point we concluded 	our discussion.
+
+I'm glad I was able to be of assistance today. As discussed on call, you will be performing above steps at your end and as confirmed I will be marking this case as resolved.
+
+However, if you have any additional concerns or queries please feel free to reach out to us using a new support case and we will be happy to assist.
+
+Take care and have an AWSome day!!
+
+=============
+  REFERENCES:
+=============
+
+[1] Pre-requisistes for karpenter : https://blog.stackademic.com/getting-started-with-karpenter-for-autoscaling-in-eks-9b1992876f4c
+
+[2] Install karpenter : https://karpenter.sh/docs/getting-started/getting-started-with-karpenter/
+
